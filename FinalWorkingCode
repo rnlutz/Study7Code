@@ -1,0 +1,74 @@
+#include <WiFi.h>        // ESP32 Library
+#include <SPI.h>         // SPI Library 
+#include <SD.h>          // SD card library
+#include <time.h>        // Time Stamp Library
+
+// WiFi Network 
+const char* ssid = "Guest";         // Network SSID
+const char* password = ""; // Network Password
+
+// SD Card
+const int chipSelect = 5; // SD card Pin
+
+// Logging Time
+const char* ntpServer = "pool.ntp.org";
+const long gmtOffset_sec = -7 * 3600;         // Mountain Standard Time (UTC-7) Offset
+const int daylightOffset_sec = 1 * 3600;      // Daylight Saving Time (UTC-6 during DST)
+
+void setup() {
+  Serial.begin(115200);
+
+  // Connecting to WiFi
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting to WiFi...");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nConnected to WiFi.");
+
+  // Initialize SD card
+  if (!SD.begin(chipSelect)) {
+    Serial.println("SD card initialization failed!");
+    return;
+  }
+  Serial.println("SD card initialized.");
+
+  // Initialize time with Mountain Time settings
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+  Serial.println("Time initialized to Mountain Time.");
+}
+
+String getTimeStamp() {
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) {
+    Serial.println("Failed to obtain time");
+    return "00:00:00"; // Fallback if time retrieval fails
+  }
+  
+  char timeString[10];
+  strftime(timeString, sizeof(timeString), "%H:%M:%S", &timeinfo);
+  return String(timeString);
+}
+
+void loop() {
+  int32_t rssi = WiFi.RSSI(); // Get WiFi signal strength
+  String timeStamp = getTimeStamp(); // Get the current time as a string
+
+  // Open file on SD card to append
+  File dataFile = SD.open("/wifi_log.txt", FILE_APPEND);
+  if (dataFile) {
+    // Write RSSI and timestamp in format "RSSI,Time"
+    dataFile.print(rssi);
+    dataFile.print(",");
+    dataFile.println(timeStamp);
+
+    // Close file
+    dataFile.close();
+    Serial.println("Data written to SD card: " + String(rssi) + "," + timeStamp);
+  } else {
+    Serial.println("Error opening file on SD card.");
+  }
+
+  delay(300000); // 5 Minutes Between Each Measurement
+}
